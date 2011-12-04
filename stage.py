@@ -27,11 +27,17 @@ def main():
             'site': site
         }
         
-        # Generate apache conf
-        template = env.get_template('apache/base.conf')
-        filename = 'httpd/%s.conf' % site
-        with open(filename, 'w') as f:
-            f.write(template.render(context))
+        # Generate an apache conf for each host in `staging.yml`
+        for host in conf['hosts']:
+            host_apache_dir = 'httpd/%s' % host
+            template = env.get_template('apache/base.conf')
+            
+            if not os.path.exists(host_apache_dir):
+                os.makedirs(host_apache_dir)
+            
+            filename = 'httpd/%s/%s.conf' % (host, site)
+            with open(filename, 'w') as f:
+                f.write(template.render(context))
         
         # Generate wsgi conf
         template = env.get_template('wsgi/base.conf')
