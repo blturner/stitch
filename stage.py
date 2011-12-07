@@ -1,7 +1,29 @@
 #!/usr/bin/env python
-import os, pprint, urllib, yaml
+import argparse, os, pprint, urllib, yaml
 from jinja2 import Environment, FileSystemLoader
 
+parser = argparse.ArgumentParser(description='Management of django staging environments.')
+parser.add_argument(
+    'hosts',
+    metavar='host',
+    nargs='+',
+    help='List of hosts defined in staging.yml to update.')
+parser.add_argument(
+    '--sites',
+    metavar='site',
+    nargs='+',
+    default='ALL', help='List of sites defined in staging.yml to update.')
+parser.add_argument(
+    '--reinstall',
+    action='store_true',
+    help='If set, all packages will be re-installed using pip.')
+parser.add_argument(
+    '--upgrade',
+    metavar='pkg',
+    nargs='+',
+    help='List of packages to upgrade with pip.')
+
+args = parser.parse_args()
 env = Environment(loader=FileSystemLoader('templates'))
 
 def main():
