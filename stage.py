@@ -8,9 +8,12 @@ def main():
     """
     Setup a staging environment.
     
-    `python stage.py [--rebuild]`
+    `python stage.py [--reinstall] -h host [-s site] [--upgrade pkg, pkg...]`
     
-    --rebuild: Refresh the virtualenv and reinstall all packages with pip.
+    --reinstall: Reinstall all packages with pip.
+    -h: The desired host as defined in staging.yml, e.g. "hockney"
+    -s: The site to make changes to as defined in staging.yml. Defaults to all.
+    --upgrade: Packages to upgrade with pip.
     
     Depends on:
     - Git
