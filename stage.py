@@ -26,42 +26,45 @@ parser.add_argument(
 args = parser.parse_args()
 env = Environment(loader=FileSystemLoader('templates'))
 
-def main():
+def render_jinja(template, context, filename):
+    t = env.get_template(template)
+    c = context
+    with open(filename, 'w') as f:
+        f.write(t.render(c))
+
+def main(args):
     """
-    Setup a staging environment.
-    
-    `python stage.py [--reinstall] -h host [-s site] [--upgrade pkg, pkg...]`
-    
-    --reinstall: Reinstall all packages with pip.
-    -h: The desired host as defined in staging.yml, e.g. "hockney"
-    -s: The site to make changes to as defined in staging.yml. Defaults to all.
-    --upgrade: Packages to upgrade with pip.
-    
-    Depends on:
-    - Git
-    - Pip
-    - Virtualenv
+    usage: stage.py [-h] [--sites site [site ...]] [--reinstall] 
+        [--upgrade pkg [pkg ...]]
+        host [host ...]
     """
     f = open("staging.yml")
     conf = yaml.load(f.read())
     f.close()
     
     # TODO: Check for these paths if they are set in staging.yml
-    apache_dir = "/Users/bturner/Projects/staging/httpd"
-    wsgi_dir = "/Users/bturner/Projects/staging/wsgi"
+    apache_dir = '/Users/bturner/Projects/staging/httpd'
+    wsgi_dir = '/Users/bturner/Projects/staging/wsgi'
+    settings_dir = '/Users/bturner/Projects/staging/staging_settings'
     
-    # for host, hostconfig in conf['hosts'].iteritems():
-        # print host
-        # print hostconfig
+    # Build up the list of sites to be staged, reading from staging.yml.
+    if args['sites'] == 'ALL':
+        sites = conf['sites']
+    else:
+        sites = {}
+        for site in args['sites']:
+            sites[site] = conf['sites'].get(site)
     
-    # Generate Apache confs
-    for site, sitedict in conf['sites'].iteritems():
-        pythonpath = sitedict.get('pythonpath', conf['sites_defaults']['pythonpath'])
+    for site, sitedict in sites.iteritems():
+        print "Configuring staging settings for: %s" % site
+        
+        pythonpath = sitedict.get(
+            'pythonpath',
+            conf['sites_defaults']['pythonpath'])
+        
         # if `pythonpath` is a string, return it as a list
         if isinstance(pythonpath, str):
             pythonpath = [pythonpath]
-        settings_dir = "staging_settings/%s" % site
-        settings_overrides = {}
         
         # Create the virtualenv
         project_dir = conf['hosts']['rembrandt'].get('project_dir') + '/' + conf['sites'][site].get('project_name')
@@ -74,40 +77,43 @@ def main():
             cdsitepackages && pwd' % site
         fin, fout = os.popen4(cmd)
         for result in fout.readlines():
-            sp = result.rstrip()
+            sitepackages = result.rstrip()
         
         context = {
             'pythonpath': pythonpath,
-            'sitepackages': sp,
-            'site': site
+            'site': site,
+            'sitepackages': sitepackages
         }
         
-        # Generate an apache conf for each host in `staging.yml`
-        for host in conf['hosts']:
-            if not host == 'defaults':
-                host_apache_dir = 'httpd/%s' % host
-                template = env.get_template('apache/base.conf')
-                
-                if not os.path.exists(host_apache_dir):
-                    os.makedirs(host_apache_dir)
-                
-                filename = 'httpd/%s/%s.conf' % (host, site)
-                with open(filename, 'w') as f:
-                    f.write(template.render(context))
         
-        # Generate wsgi conf
-        template = env.get_template('wsgi/base.conf')
-        filename = 'wsgi/sites.%s.conf' % site
-        with open(filename, 'w') as f:
-            f.write(template.render(context))
+        # Render an apache conf
+        apache_dir = 'httpd'
+        
+        if not os.path.exists(apache_dir):
+            os.makedirs(apache_dir)
+        
+        filename = '%s/%s.conf' % (apache_dir, site)
+        render_jinja('apache/base.conf', context, filename)
+        
+        
+        # Render a WSGI conf
+        wsgi_dir = 'wsgi'
+        
+        if not os.path.exists(wsgi_dir):
+            os.makedirs(wsgi_dir)
+        
+        filename = '%s/sites.%s.conf' % (wsgi_dir, site)
+        render_jinja('wsgi/base.conf', context, filename)
+        
         
         # Generate staging settings
-        template = env.get_template('settings/base.py')
-        
         pp = pprint.PrettyPrinter()
+        site_settings_dir = settings_dir + '/' + site
+        settings_overrides = {}
         settings_overrides.update(sitedict)
         settings_overrides.update(conf['sites_defaults'])
         settings_overrides = [ [k, pp.pformat(v)] for k, v in settings_overrides.iteritems()]
+        
         context = {
             'original_settings': sitedict.get('original_settings'),
             'settings_overrides': settings_overrides
@@ -115,21 +121,27 @@ def main():
         
         if not os.path.exists(settings_dir):
             os.makedirs(settings_dir)
-        if not os.path.exists(settings_dir + "__init__.py"):
             open(os.path.join(settings_dir, "__init__.py"), 'w')
-        if not os.path.exists(settings_dir + "manage.py"):
+        
+        if not os.path.exists(site_settings_dir):
+            os.makedirs(site_settings_dir)
+        
+        if not os.path.exists(site_settings_dir + "__init__.py"):
+            open(os.path.join(site_settings_dir, "__init__.py"), 'w')
+        
+        if not os.path.exists(site_settings_dir + "manage.py"):
             urllib.urlretrieve(
                 "https://code.djangoproject.com/export/17145/django/branches/releases/1.3.X/django/conf/project_template/manage.py",
-                settings_dir + "/manage.py"
+                site_settings_dir + "/manage.py"
             )
         
-        filename = settings_dir + "/settings.py"
-        with open(filename, 'w') as f:
-            f.write(template.render(context))
-            f.close()
+        filename = site_settings_dir + "/settings.py"
+        render_jinja('settings/base.py', context, filename)
+    
     
     # Restart apache
+    print "Restarting apache."
     os.system("/usr/bin/sudo apachectl restart")
 
 if __name__ == '__main__':
-    main()
+    main(args.__dict__)
