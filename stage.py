@@ -67,6 +67,14 @@ def main(args):
     
     for site, sitedict in sites.iteritems():
         print "Configuring staging settings for: %s" % site
+
+        # Allows a site in staging.yml to inherit the settings of an existing site definition
+        # and provide overrides for the existing definition.
+        if sitedict.get('based_on'):
+            parent = conf['sites'].get(site).get('based_on')
+            parent_settings = conf['sites'].get(parent)
+            parent_settings.update(sitedict)
+            sitedict = parent_settings
         
         pythonpath = sitedict.get(
             'pythonpath',
@@ -77,8 +85,7 @@ def main(args):
             pythonpath = [pythonpath]
         
         # Create the virtualenv
-        project_dir = conf['hosts']['rembrandt'].get('project_dir') + '/' + conf['sites'][site].get('project_name')
-        print "project_dir = %s" % project_dir
+        project_dir = conf['hosts']['rembrandt'].get('project_dir') + '/' + sitedict.get('project_name')
         os.system('./mkvirtualenv.sh %s %s' % (site, project_dir))
         
         # TODO: Whoa, this is crazy. Find out the virtualenv `site-packages`
