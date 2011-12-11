@@ -37,12 +37,22 @@ def main(args):
     usage: stage.py [-h] [--sites site [site ...]] [--reinstall] 
         [--upgrade pkg [pkg ...]]
         host [host ...]
+    
+    NOT IMPLEMENTED:
+    --reinstall, --upgrade
     """
     f = open("staging.yml")
     conf = yaml.load(f.read())
     f.close()
     
     # TODO: Check for these paths if they are set in staging.yml
+    # These vars should be setup by host, e.g.
+    # rembrandt:
+    #     hostname: rembrandt.local
+    #     apache_dir: /Users/bturner/Projects/staging/httpd
+    #     wsgi_dir: /Users/bturner/Projects/staging/wsgi
+    #     settings_dir: /Users/bturner/Projects/staging/staging_settings
+    
     apache_dir = '/Users/bturner/Projects/staging/httpd'
     wsgi_dir = '/Users/bturner/Projects/staging/wsgi'
     settings_dir = '/Users/bturner/Projects/staging/staging_settings'
