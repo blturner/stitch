@@ -86,7 +86,8 @@ def main(args):
         
         # Create the virtualenv
         project_dir = conf['hosts']['rembrandt'].get('project_dir') + '/' + sitedict.get('project_name')
-        os.system('./mkvirtualenv.sh %s %s' % (site, project_dir))
+        git_branch_name = sitedict.get('git_branch_name')
+        os.system('./mkvirtualenv.sh %s %s %s' % (site, project_dir, git_branch_name))
         
         # TODO: Whoa, this is crazy. Find out the virtualenv `site-packages`
         # dir so it can be added to the wsgi path
