@@ -4,10 +4,8 @@ from jinja2 import Environment, FileSystemLoader
 
 parser = argparse.ArgumentParser(description='Management of django staging environments.')
 parser.add_argument(
-    'hosts',
-    metavar='host',
-    nargs='+',
-    help='List of hosts defined in staging.yml to update.')
+    'host',
+    help='The host defined in staging.yml to update.')
 parser.add_argument(
     '--sites',
     metavar='site',
@@ -36,7 +34,9 @@ def main(args):
     """
     usage: stage.py [-h] [--sites site [site ...]] [--reinstall] 
         [--upgrade pkg [pkg ...]]
-        host [host ...]
+        host
+    
+    There is currently no way to cleanup generated files.
     
     NOT IMPLEMENTED:
     --reinstall, --upgrade
@@ -52,10 +52,12 @@ def main(args):
     #     apache_dir: /Users/bturner/Projects/staging/httpd
     #     wsgi_dir: /Users/bturner/Projects/staging/wsgi
     #     settings_dir: /Users/bturner/Projects/staging/staging_settings
-    
-    apache_dir = '/Users/bturner/Projects/staging/httpd'
-    wsgi_dir = '/Users/bturner/Projects/staging/wsgi'
-    settings_dir = '/Users/bturner/Projects/staging/staging_settings'
+   
+    host = conf['hosts'].get(args['host'])
+    project_root = host.get('project_dir')
+    apache_dir = "%s" % host.get('apache_dir')
+    wsgi_dir = "%s" % host.get('wsgi_dir')
+    settings_dir = "%s/%s" % (project_root, 'staging/staging_settings')
     
     # Build up the list of sites to be staged, reading from staging.yml.
     if args['sites'] == 'ALL':
@@ -86,7 +88,11 @@ def main(args):
         
         # Create the virtualenv
         project_dir = conf['hosts']['rembrandt'].get('project_dir') + '/' + sitedict.get('project_name')
-        git_branch_name = sitedict.get('git_branch_name')
+        
+        git_branch_name = sitedict.get(
+            'git_branch_name',
+            conf['sites_defaults']['git_branch_name'])
+        
         os.system('./mkvirtualenv.sh %s %s %s' % (site, project_dir, git_branch_name))
         
         # TODO: Whoa, this is crazy. Find out the virtualenv `site-packages`
