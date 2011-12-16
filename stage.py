@@ -44,14 +44,6 @@ def main(args):
     f = open("staging.yml")
     conf = yaml.load(f.read())
     f.close()
-    
-    # TODO: Check for these paths if they are set in staging.yml
-    # These vars should be setup by host, e.g.
-    # rembrandt:
-    #     hostname: rembrandt.local
-    #     apache_dir: /Users/bturner/Projects/staging/httpd
-    #     wsgi_dir: /Users/bturner/Projects/staging/wsgi
-    #     settings_dir: /Users/bturner/Projects/staging/staging_settings
    
     host = conf['hosts'].get(args['host'])
     project_root = host.get('project_dir')
