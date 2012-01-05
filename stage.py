@@ -79,7 +79,7 @@ def main(args):
             pythonpath = [pythonpath]
         
         # Create the virtualenv
-        project_dir = conf['hosts']['rembrandt'].get('project_dir') + '/' + sitedict.get('project_name')
+        project_dir = conf['hosts'][args['host']].get('project_dir') + '/' + sitedict.get('project_name')
         
         git_branch_name = sitedict.get(
             'git_branch_name',
