@@ -2,6 +2,13 @@
 import argparse, os, pprint, urllib, yaml
 from jinja2 import Environment, FileSystemLoader
 
+"""
+Dependencies:
+Python < 2.7 requires argparse: `pip install argparse`
+PyYAML: `pip install pyyaml`
+Jinja2: `pip install jinja2`
+"""
+
 parser = argparse.ArgumentParser(description='Management of django staging environments.')
 parser.add_argument(
     'host',
@@ -99,6 +106,9 @@ def main(args):
             'pythonpath': pythonpath,
             'site': site,
             'sitepackages': sitepackages
+            'staging_domain': conf['hosts'][args['host']].get(
+                'staging_domain',
+                conf['hosts_defaults']['staging_domain'])
         }
         
         
@@ -156,8 +166,8 @@ def main(args):
     
     
     # Restart apache
-    print "Restarting apache."
-    os.system("/usr/bin/sudo apachectl restart")
+    # print "Restarting apache."
+    # os.system("/usr/bin/sudo apachectl restart")
 
 if __name__ == '__main__':
     main(args.__dict__)
