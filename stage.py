@@ -107,7 +107,7 @@ def main(args):
         context = {
             'pythonpath': pythonpath,
             'site': site,
-            'sitepackages': sitepackages
+            'sitepackages': sitepackages,
             'staging_domain': conf['hosts'][args['host']].get(
                 'staging_domain',
                 conf['hosts_defaults']['staging_domain'])
