@@ -164,9 +164,5 @@ def main(args):
         render_jinja('settings/base.py', context, filename)
 
 
-    # Restart apache
-    # print "Restarting apache."
-    # os.system("/usr/bin/sudo apachectl restart")
-
 if __name__ == '__main__':
     main(args.__dict__)
