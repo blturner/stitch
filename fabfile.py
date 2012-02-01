@@ -1,19 +1,36 @@
-import copy, os, yaml
+import copy, os, pprint, urllib, yaml
 
 from fabric.api import env, local, prefix, require, roles, run, sudo
 from fabric.context_managers import cd
 from fabric.contrib.files import exists, first
 from fabric.operations import put
+from jinja2 import Environment, FileSystemLoader
 
 """
 Usage:
     `fab stage`
     `fab deploy`
+    Setting roles from the command line:
+    `fab --roles=ROLE stage`
 """
 
 f = open("staging.yml")
 env.conf = yaml.load(f.read())
 f.close()
+jinja_env = Environment(loader=FileSystemLoader('templates'))
+
+
+def render_jinja(template, context, filename):
+    t = jinja_env.get_template(template)
+    c = context
+    with open(filename, 'w') as f:
+        f.write(t.render(c))
+
+
+def dump_jinja(template, context, filename):
+    t = jinja_env.get_template(template)
+    c = context
+    return t.stream(c).dump(filename)
 
 
 def setup_roles():
@@ -52,6 +69,12 @@ def get_sites():
     return sites
 
 
+def get_site_packages(site):
+    env.site = site
+    sp = virtualenv('source `which virtualenvwrapper.sh` && workon %s && cdsitepackages && pwd' % site)
+    return sp
+
+
 def get_site_settings(site):
     settings = env.conf['sites_defaults'].copy()
     settings.update(env.conf['sites'][site])
@@ -60,8 +83,9 @@ def get_site_settings(site):
     # FIXME: Correct any settings that 'based_on' may have overwritten.
     # Probably could be cleaner.
     settings.update(env.conf['sites'][site])
-    env.update(settings)
-    return env
+    # env.update(settings)
+    # return env
+    return settings
 
 
 def site_on_host(site, host):
@@ -73,21 +97,98 @@ def site_on_host(site, host):
     return False
 
 
+def set_apache_conf():
+    host = get_host_shortname(env.host)
+    host_dict = get_host_dict(env.host)
+    apache_dir = '/'.join((host_dict.get('apache_dir'), host))
+    local_dir = '/'.join(('/Users/bturner/Projects/staging/httpd', host))
+    for site in get_sites():
+        if not os.path.exists(local_dir):
+            os.makedirs(local_dir)
+        filename = '%s.conf' % site
+        context = {
+            'site': site,
+            'sitepackages': get_site_packages(site),
+            'staging_domain': host_dict.get('staging_domain'),
+            'wsgi_dir': host_dict.get('wsgi_dir')
+        }
+        local_file = '/'.join((local_dir, filename))
+        render_jinja('apache/base.conf', context, local_file)
+        if not exists(apache_dir):
+            run('mkdir -p %s' % apache_dir)
+        put(local_file, apache_dir)
+
+
+def set_wsgi_conf():
+    host = get_host_shortname(env.host)
+    host_dict = get_host_dict(env.host)
+    wsgi_dir = host_dict.get('wsgi_dir')
+    local_dir = '/'.join(('/Users/bturner/Projects/staging/wsgi', host))
+    for site in get_sites():
+        if not os.path.exists(local_dir):
+            os.makedirs(local_dir)
+        filename = 'sites.%s.conf' % site
+        context = {
+            'sitepackages': get_site_packages(site),
+            'site': site
+        }
+        wsgi_conf = '/'.join((local_dir, filename))
+        render_jinja('wsgi/base.conf', context, wsgi_conf)
+        if not exists(wsgi_dir):
+            run('mkdir -p %s' % wsgi_dir)
+        put(wsgi_conf, wsgi_dir)
+
+
+def setup_settings_dir(settings_dir, site_settings_dir):
+    if not os.path.exists(settings_dir + '__init__.py'):
+        open(os.path.join(settings_dir, '__init__.py'), 'w')
+
+    if not os.path.exists(site_settings_dir + '__init__.py'):
+        open(os.path.join(site_settings_dir, '__init__.py'), 'w')
+
+    if not os.path.exists(site_settings_dir + 'manage.py'):
+        urllib.urlretrieve(
+            'https://code.djangoproject.com/export/17145/django/branches/releases/1.3.X/django/conf/project_template/manage.py',
+            site_settings_dir + '/manage.py')
+
+
+def set_settings_overrides():
+    pp = pprint.PrettyPrinter()
+    settings_dir = '/home/bturner/code/staging/staging_settings'
+    local_dir = '/Users/bturner/Projects/staging/staging_settings'
+    for site in get_sites():
+        site_settings_dir = '/'.join((settings_dir, site))
+        local_settings_dir = '/'.join((local_dir, site))
+
+        if not os.path.exists(local_settings_dir):
+            os.makedirs(local_settings_dir)
+        setup_settings_dir(local_dir, local_settings_dir)
+
+        put('/'.join((local_dir, '__init__.py')), settings_dir)
+        put('/'.join((local_settings_dir, '__init__.py')), site_settings_dir)
+        put('/'.join((local_settings_dir, 'manage.py')), site_settings_dir)
+
+        settings = get_site_settings(site)
+        s = [[k, pp.pformat(v)] for k, v in settings.iteritems()]
+        context = {
+            'original_settings': settings.get('original_settings'),
+            'settings_overrides': s
+        }
+        filename = '/'.join((local_settings_dir, 'settings.py'))
+        render_jinja('settings/base.py', context, filename)
+        if not exists(site_settings_dir):
+            run('mkdir -p %s' % site_settings_dir)
+        put(filename, site_settings_dir)
+
+
 @roles('staging')
-def stage():
+def setup_virtualenv():
     """
     Copy staging.yml to remote and run stage.py to generate
     Apache and WSGI settings files.
     """
     code_dir = get_host_dict(env.host).get('code_dir')
     staging_dir = code_dir + '/staging'
-
-    # Update staging.yml on the remote because we'll read from it
-    # on the server when running stage.py
-    with cd(staging_dir):
-        put('staging.yml', staging_dir)
-        print 'python stage.py %s --sites %s' %  \
-            (get_host_shortname(env.host), ' '.join(get_sites()))
 
     prefix_command = 'export PIP_VIRTUALENV_BASE=%s; ' % get_host_dict(env.host).get('virtualenv_dir')
     prefix_command += 'export PIP_RESPECT_VIRTUALEVN=true'
@@ -104,6 +205,15 @@ def stage():
                 virtualenv(git_checkout(proj_dir, env.get('git_parent'), \
                     env.get('git_branch_name')))
 
+    # Update staging.yml on the remote because we'll read from it
+    # on the server when running stage.py
+    # with cd(staging_dir):
+    put('staging.yml', staging_dir)
+    put('stage.py', staging_dir)
+    with cd(staging_dir):
+        run('python stage.py %s --sites %s' %  \
+            (get_host_shortname(env.host), ' '.join(get_sites())))
+
 
 def virtualenv(command):
     with prefix("source /usr/local/bin/virtualenvwrapper.sh"):
@@ -114,19 +224,26 @@ def virtualenv(command):
         cmd = 'workon %s; ' % env.site
         cmd += 'cdvirtualenv; '
         cmd += command
-        run(cmd)
+        out = run(cmd)
+        return out
+
+
+def pip_install():
+    host_dict = get_host_dict(env.host)
+    for site in get_sites():
+        env.site = site  # Needed for virtualenv()
+        settings_dict = get_site_settings(site)
+
+        virtualenv('pip install -r %s/%s/%s' % (
+            host_dict.get('virtualenv_dir'),
+            site,
+            settings_dict.get('project_name')) + '/requirements.txt')
 
 
 @roles('staging')
-def pip_install():
-    for site in get_sites():
-        env.site = site  # Needed for virtualenv()
-        get_site_settings(site)
-
-        virtualenv('pip install -r %s/%s/%s' % (
-            get_host_dict(env.host).get('virtualenv_dir'),
-            site,
-            env.get('project_name')) + '/requirements.txt')
+def stage():
+    setup_virtualenv()
+    pip_install()
 
 
 @roles('production')
