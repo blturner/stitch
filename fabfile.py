@@ -27,12 +27,6 @@ def render_jinja(template, context, filename):
         f.write(t.render(c))
 
 
-def dump_jinja(template, context, filename):
-    t = jinja_env.get_template(template)
-    c = context
-    return t.stream(c).dump(filename)
-
-
 def setup_roles():
     for role, hosts in env.conf['roles'].iteritems():
         if isinstance(hosts, str):
