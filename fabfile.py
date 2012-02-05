@@ -46,6 +46,15 @@ def get_host_dict(hostname):
 
 
 def get_host_shortname(hostname):
+    """
+    Returns a shortname from a hostname as defined in a yaml file, e.g.:
+    YAML:
+    hockney:
+        hostname: hockney.servers.ben-turner.com
+
+    >>> get_host_shortname('hockney.servers.ben-turner.com')
+    >>> 'hockney'
+    """
     reverse_host_dict = {}
     for k, v in env.conf['hosts'].iteritems():
         reverse_host_dict[v.get('hostname')] = k
@@ -192,24 +201,22 @@ def setup_virtualenv():
     for site in get_sites():
         env.site = site
         site_dict = get_site_settings(site)
+        virtualenv_dir = host_dict.get('virtualenv_dir')
         proj_dir = "%s/%s/%s" % (
-            host_dict.get('virtualenv_dir'),
+            virtualenv_dir,
             site,
             site_dict.get('project_name'))
         with prefix(prefix_command):
             if not exists(proj_dir):
+                # clone git project
                 virtualenv(git_clone(site_dict.get('clone_url')))
-                virtualenv(git_checkout(proj_dir, site_dict.get('git_parent'), \
-                    site_dict.get('git_branch_name')))
+                # git checkout parent/branch (Should check if not using master)
+                if not site_dict.get('git_branch_name') == 'master':
+                    virtualenv(git_checkout(proj_dir, site_dict.get('git_parent'), \
+                        site_dict.get('git_branch_name')))
 
-    # Update staging.yml on the remote because we'll read from it
-    # on the server when running stage.py
-    # with cd(staging_dir):
-    put('staging.yml', staging_dir)
-    put('stage.py', staging_dir)
-    with cd(staging_dir):
-        run('python stage.py %s --sites %s' %  \
-            (get_host_shortname(env.host), ' '.join(get_sites())))
+                virtualenv('add2virtualenv %s' % staging_dir)
+                virtualenv('add2virtualenv %s/%s' % (virtualenv_dir, site))
 
 
 def virtualenv(command):
