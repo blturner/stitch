@@ -187,17 +187,20 @@ def setup_virtualenv():
     prefix_command = 'export PIP_VIRTUALENV_BASE=%s; ' % get_host_dict(env.host).get('virtualenv_dir')
     prefix_command += 'export PIP_RESPECT_VIRTUALEVN=true'
 
+    host_dict = get_host_dict(env.host)
+
     for site in get_sites():
         env.site = site
+        site_dict = get_site_settings(site)
         proj_dir = "%s/%s/%s" % (
-            get_host_dict(env.host).get('virtualenv_dir'),
+            host_dict.get('virtualenv_dir'),
             site,
-            get_site_settings(site).get('project_name'))
+            site_dict.get('project_name'))
         with prefix(prefix_command):
             if not exists(proj_dir):
-                virtualenv(git_clone(env.get('clone_url')))
-                virtualenv(git_checkout(proj_dir, env.get('git_parent'), \
-                    env.get('git_branch_name')))
+                virtualenv(git_clone(site_dict.get('clone_url')))
+                virtualenv(git_checkout(proj_dir, site_dict.get('git_parent'), \
+                    site_dict.get('git_branch_name')))
 
     # Update staging.yml on the remote because we'll read from it
     # on the server when running stage.py
