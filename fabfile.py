@@ -179,7 +179,7 @@ def set_settings_overrides():
     local_dir = '/Users/bturner/Projects/staging/staging_settings'
     for site in get_sites():
         site_settings_dir = '/'.join((settings_dir, site))
-        local_settings_dir = '/'.join((local_dir, site))
+        local_settings_dir = '/'.join((local_dir, env.host, site))
 
         if not os.path.exists(local_settings_dir):
             os.makedirs(local_settings_dir)
