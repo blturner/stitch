@@ -148,9 +148,12 @@ def set_wsgi_conf():
         if not os.path.exists(local_dir):
             os.makedirs(local_dir)
         filename = 'sites.%s.conf' % site
+
+        pypath = get_site_settings(site).get('pythonpath').get(host, [])
+        pypath.append(get_site_packages(site))
+
         context = {
-            'pythonpath': get_site_settings(site).get('pythonpath').get(host),
-            'sitepackages': get_site_packages(site),
+            'pythonpath': pypath,
             'site': site
         }
         wsgi_conf = '/'.join((local_dir, filename))
