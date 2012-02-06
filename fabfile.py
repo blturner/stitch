@@ -1,4 +1,4 @@
-import copy, os, pprint, urllib, yaml
+import collections, copy, os, pprint, urllib, yaml
 
 from fabric.api import env, local, prefix, require, roles, run, sudo
 from fabric.context_managers import cd
@@ -25,6 +25,21 @@ def render_jinja(template, context, filename):
     c = context
     with open(filename, 'w') as f:
         f.write(t.render(c))
+
+
+def update(d, u):
+    """
+    Utility function that takes a dictionary and updates keys with values from a
+    second dictionary.
+    http://stackoverflow.com/a/3233356
+    """
+    for k, v in u.iteritems():
+        if isinstance(v, collections.Mapping):
+            r = update(d.get(k, {}), v)
+            d[k] = r
+        else:
+            d[k] = u[k]
+    return d
 
 
 def setup_roles():
@@ -79,20 +94,22 @@ def get_site_packages(site):
 
 
 def get_site_settings(site):
+    host_dict = get_host_dict(env.host)
     settings = env.conf['sites_defaults'].copy()
-    settings.update(env.conf['sites'][site])
-    if settings.get('based_on'):
-        settings.update(env.conf['sites'][settings.get('based_on')])
-    # FIXME: Correct any settings that 'based_on' may have overwritten.
-    # Probably could be cleaner.
-    settings.update(env.conf['sites'][site])
-    # env.update(settings)
-    # return env
+    site_settings = env.conf['sites'][site]
+
+    if host_dict.get('settings_overrides'):
+        settings['settings_overrides'] = host_dict.get('settings_overrides')
+
+    if site_settings.get('based_on'):
+        update(settings, env.conf['sites'][site_settings.get('based_on')])
+
+    update(settings, site_settings)
     return settings
 
 
 def site_on_host(site, host):
-    on_hosts = env.conf['sites'][site].get('on_hosts')
+    on_hosts = get_site_settings(site).get('on_hosts')
     if isinstance(on_hosts, str):
         on_hosts = [on_hosts]
     if host in on_hosts:
@@ -132,6 +149,7 @@ def set_wsgi_conf():
             os.makedirs(local_dir)
         filename = 'sites.%s.conf' % site
         context = {
+            'pythonpath': get_site_settings(site).get('pythonpath').get(host),
             'sitepackages': get_site_packages(site),
             'site': site
         }
@@ -172,7 +190,7 @@ def set_settings_overrides():
         put('/'.join((local_settings_dir, 'manage.py')), site_settings_dir)
 
         settings = get_site_settings(site)
-        s = [[k, pp.pformat(v)] for k, v in settings.iteritems()]
+        s = [[k, pp.pformat(v)] for k, v in settings['settings_overrides'].iteritems()]
         context = {
             'original_settings': settings.get('original_settings'),
             'settings_overrides': s
