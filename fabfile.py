@@ -205,8 +205,7 @@ def set_settings_overrides():
 @roles('staging')
 def setup_virtualenv():
     """
-    Copy staging.yml to remote and run stage.py to generate
-    Apache and WSGI settings files.
+    Setup virtual environments.
     """
     code_dir = get_host_dict(env.host).get('code_dir')
     staging_dir = code_dir + '/staging'
