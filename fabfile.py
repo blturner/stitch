@@ -127,8 +127,9 @@ def set_apache_conf():
             os.makedirs(local_dir)
         filename = '%s.conf' % site
         context = {
+            'admin_media': '/'.join((get_site_packages(site), 'django/contrib/admin/media')),
             'site': site,
-            'sitepackages': get_site_packages(site),
+            # 'sitepackages': get_site_packages(site),
             'staging_domain': host_dict.get('staging_domain'),
             'wsgi_dir': host_dict.get('wsgi_dir')
         }
