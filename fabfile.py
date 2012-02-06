@@ -99,7 +99,7 @@ def get_site_settings(site):
     site_settings = env.conf['sites'][site]
 
     if host_dict.get('settings_overrides'):
-        settings['settings_overrides'] = host_dict.get('settings_overrides')
+        update(settings['settings_overrides'], host_dict.get('settings_overrides'))
 
     if site_settings.get('based_on'):
         update(settings, env.conf['sites'][site_settings.get('based_on')])
