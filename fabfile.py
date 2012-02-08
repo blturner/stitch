@@ -129,7 +129,6 @@ def set_apache_conf():
         context = {
             'admin_media': '/'.join((get_site_packages(site), 'django/contrib/admin/media')),
             'site': site,
-            # 'sitepackages': get_site_packages(site),
             'staging_domain': host_dict.get('staging_domain'),
             'wsgi_dir': host_dict.get('wsgi_dir')
         }
