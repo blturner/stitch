@@ -1,4 +1,4 @@
-import collections, copy, os, pprint, urllib, yaml
+import collections, copy, os, pprint, shutil, urllib, yaml
 
 from fabric.api import env, local, prefix, require, roles, run, sudo
 from fabric.context_managers import cd
@@ -18,6 +18,27 @@ f = open("staging.yml")
 env.conf = yaml.load(f.read())
 f.close()
 jinja_env = Environment(loader=FileSystemLoader('templates'))
+
+
+def local_or_remote(command):
+    if env.local:
+        return local(command, capture=True)
+    else:
+        return run(command)
+
+
+def local_or_remote_exists(path):
+    if env.local:
+        return os.path.exists(path)
+    else:
+        return exists(path)
+
+
+def put_local_or_remote(local_path, remote_path):
+    if env.local:
+        shutil.copy(local_path, remote_path)
+    else:
+        put(local_path, remote_path)
 
 
 def render_jinja(template, context, filename):
@@ -47,6 +68,8 @@ def setup_roles():
         if isinstance(hosts, str):
             hosts = [hosts]
 
+        if role == 'testing':
+            env.local = True
         env.roledefs[role] = []
         for host in hosts:
             env.roledefs[role].append(env.conf['hosts'][host].get('hostname'))
@@ -89,7 +112,7 @@ def get_sites():
 
 def get_site_packages(site):
     env.site = site
-    sp = virtualenv('source `which virtualenvwrapper.sh` && workon %s && cdsitepackages && pwd' % site)
+    sp = virtualenv('cdsitepackages && pwd')
     return sp
 
 
@@ -134,9 +157,9 @@ def set_apache_conf():
         }
         local_file = '/'.join((local_dir, filename))
         render_jinja('apache/base.conf', context, local_file)
-        if not exists(apache_dir):
-            run('mkdir -p %s' % apache_dir)
-        put(local_file, apache_dir)
+        if not local_or_remote_exists(apache_dir):
+            local_or_remote('mkdir -p %s' % apache_dir)
+        put_local_or_remote(local_file, apache_dir)
 
 
 def set_wsgi_conf():
@@ -158,9 +181,9 @@ def set_wsgi_conf():
         }
         wsgi_conf = '/'.join((local_dir, filename))
         render_jinja('wsgi/base.conf', context, wsgi_conf)
-        if not exists(wsgi_dir):
-            run('mkdir -p %s' % wsgi_dir)
-        put(wsgi_conf, wsgi_dir)
+        if not local_or_remote_exists(wsgi_dir):
+            local_or_remote('mkdir -p %s' % wsgi_dir)
+        put_local_or_remote(wsgi_conf, wsgi_dir)
 
 
 def setup_settings_dir(settings_dir, site_settings_dir):
@@ -178,19 +201,22 @@ def setup_settings_dir(settings_dir, site_settings_dir):
 
 def set_settings_overrides():
     pp = pprint.PrettyPrinter()
-    settings_dir = '/home/bturner/code/staging/staging_settings'
+    settings_dir = get_host_dict(env.host).get('staging_settings')
+
     local_dir = '/Users/bturner/Projects/staging/staging_settings'
     for site in get_sites():
         site_settings_dir = '/'.join((settings_dir, site))
-        local_settings_dir = '/'.join((local_dir, env.host, site))
+        if not os.path.exists(site_settings_dir):
+            os.makedirs(site_settings_dir)
 
+        local_settings_dir = '/'.join((local_dir, env.host, site))
         if not os.path.exists(local_settings_dir):
             os.makedirs(local_settings_dir)
         setup_settings_dir(local_dir, local_settings_dir)
 
-        put('/'.join((local_dir, '__init__.py')), settings_dir)
-        put('/'.join((local_settings_dir, '__init__.py')), site_settings_dir)
-        put('/'.join((local_settings_dir, 'manage.py')), site_settings_dir)
+        put_local_or_remote('/'.join((local_dir, '__init__.py')), settings_dir)
+        put_local_or_remote('/'.join((local_settings_dir, '__init__.py')), site_settings_dir)
+        put_local_or_remote('/'.join((local_settings_dir, 'manage.py')), site_settings_dir)
 
         settings = get_site_settings(site)
         s = [[k, pp.pformat(v)] for k, v in settings['settings_overrides'].iteritems()]
@@ -200,12 +226,12 @@ def set_settings_overrides():
         }
         filename = '/'.join((local_settings_dir, 'settings.py'))
         render_jinja('settings/base.py', context, filename)
-        if not exists(site_settings_dir):
-            run('mkdir -p %s' % site_settings_dir)
-        put(filename, site_settings_dir)
+        if not local_or_remote_exists(site_settings_dir):
+            local_or_remote('mkdir -p %s' % site_settings_dir)
+        put_local_or_remote(filename, site_settings_dir)
 
 
-@roles('staging')
+@roles('testing')
 def setup_virtualenv():
     """
     Setup virtual environments.
@@ -227,7 +253,7 @@ def setup_virtualenv():
             site,
             site_dict.get('project_name'))
         with prefix(prefix_command):
-            if not exists(proj_dir):
+            if not local_or_remote_exists(proj_dir):
                 # clone git project
                 virtualenv(git_clone(site_dict.get('clone_url')))
                 # git checkout parent/branch (Should check if not using master)
@@ -240,15 +266,18 @@ def setup_virtualenv():
 
 
 def virtualenv(command):
-    with prefix("source /usr/local/bin/virtualenvwrapper.sh"):
+    """
+    Usage: `run(virtualenv(command)) or local(virtualenv(command))`
+    """
+    with prefix("source `which virtualenvwrapper.sh`"):
         try:
-            run('workon %s' % env.site)
+            local_or_remote('workon %s' % env.site)
         except:
-            run('mkvirtualenv %s' % env.site)
+            local_or_remote('mkvirtualenv %s' % env.site)
         cmd = 'workon %s; ' % env.site
         cmd += 'cdvirtualenv; '
         cmd += command
-        out = run(cmd)
+        out = local_or_remote(cmd)
         return out
 
 
@@ -266,6 +295,9 @@ def pip_install():
 
 @roles('staging')
 def stage():
+    """
+    This should update all server settings.
+    """
     setup_virtualenv()
     pip_install()
 
