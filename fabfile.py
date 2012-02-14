@@ -75,11 +75,12 @@ def setup_roles():
         if isinstance(hosts, str):
             hosts = [hosts]
 
-        if role == 'testing':
-            env.local = True
         env.roledefs[role] = []
         for host in hosts:
             env.roledefs[role].append(env.conf['hosts'][host].get('hostname'))
+    env.local = False
+    if env.host in env.roledefs['testing']:
+        env.local = True
 setup_roles()
 
 
@@ -213,8 +214,8 @@ def set_settings_overrides():
     local_dir = '/Users/bturner/Projects/staging/staging_settings'
     for site in get_sites():
         site_settings_dir = '/'.join((settings_dir, site))
-        if not os.path.exists(site_settings_dir):
-            os.makedirs(site_settings_dir)
+        if not local_or_remote_exists(site_settings_dir):
+            local_or_remote('mkdir -p %s' % site_settings_dir)
 
         local_settings_dir = '/'.join((local_dir, env.host, site))
         if not os.path.exists(local_settings_dir):
@@ -233,6 +234,7 @@ def set_settings_overrides():
         }
         filename = '/'.join((local_settings_dir, 'settings.py'))
         render_jinja('settings/base.py', context, filename)
+
         if not local_or_remote_exists(site_settings_dir):
             local_or_remote('mkdir -p %s' % site_settings_dir)
         put_local_or_remote(filename, site_settings_dir)
