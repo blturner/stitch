@@ -63,6 +63,13 @@ def update(d, u):
     return d
 
 
+def restart():
+    if env.local:
+        local('sudo apachectl graceful')
+    else:
+        sudo('apache2ctl graceful')
+
+
 def setup_roles():
     for role, hosts in env.conf['roles'].iteritems():
         if isinstance(hosts, str):
@@ -167,16 +174,16 @@ def set_wsgi_conf():
     host_dict = get_host_dict(env.host)
     wsgi_dir = host_dict.get('wsgi_dir')
     local_dir = '/'.join(('/Users/bturner/Projects/staging/wsgi', host))
+
     for site in get_sites():
         if not os.path.exists(local_dir):
             os.makedirs(local_dir)
         filename = 'sites.%s.conf' % site
-
         pypath = get_site_settings(site).get('pythonpath').get(host, [])
-        pypath.append(get_site_packages(site))
 
         context = {
-            'pythonpath': pypath,
+            'sitepackages': get_site_packages(site),
+            'pypath': pypath,
             'site': site
         }
         wsgi_conf = '/'.join((local_dir, filename))
@@ -231,7 +238,6 @@ def set_settings_overrides():
         put_local_or_remote(filename, site_settings_dir)
 
 
-@roles('testing')
 def setup_virtualenv():
     """
     Setup virtual environments.
@@ -293,16 +299,19 @@ def pip_install():
             settings_dict.get('project_name')) + '/requirements.txt')
 
 
-@roles('staging')
+# @roles('staging')
 def stage():
     """
     This should update all server settings.
     """
-    setup_virtualenv()
-    pip_install()
+    # setup_virtualenv()
+    set_apache_conf()
+    set_wsgi_conf()
+    set_settings_overrides()
+    restart()
 
 
-@roles('production')
+# @roles('production')
 def deploy():
     """
     This command should run git pull, update pip, and restart the server.
