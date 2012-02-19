@@ -21,21 +21,21 @@ jinja_env = Environment(loader=FileSystemLoader('templates'))
 
 
 def local_or_remote(command):
-    if env.local:
+    if is_local(env.host):
         return local(command, capture=True)
     else:
         return run(command)
 
 
 def local_or_remote_exists(path):
-    if env.local:
-        return os.path.exists(path)
+    if is_local(env.host):
+        return os.path.exists(os.path.expanduser(path))
     else:
         return exists(path)
 
 
 def put_local_or_remote(local_path, remote_path):
-    if env.local:
+    if is_local(env.host):
         shutil.copy(local_path, remote_path)
     else:
         put(local_path, remote_path)
@@ -64,7 +64,7 @@ def update(d, u):
 
 
 def restart():
-    if env.local:
+    if is_local(env.host):
         local('sudo apachectl graceful')
     else:
         sudo('apache2ctl graceful')
@@ -79,9 +79,13 @@ def setup_roles():
         for host in hosts:
             env.roledefs[role].append(env.conf['hosts'][host].get('hostname'))
     env.local = False
-    if env.host in env.roledefs['testing']:
-        env.local = True
 setup_roles()
+
+
+def is_local(host):
+    if host in env.roledefs['testing']:
+        return True
+    return False
 
 
 def get_host_dict(hostname):
