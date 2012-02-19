@@ -248,13 +248,12 @@ def setup_virtualenv():
     """
     Setup virtual environments.
     """
-    code_dir = get_host_dict(env.host).get('code_dir')
+    host_dict = get_host_dict(env.host)
+    code_dir = host_dict.get('code_dir')
     staging_dir = code_dir + '/staging'
 
-    prefix_command = 'export PIP_VIRTUALENV_BASE=%s; ' % get_host_dict(env.host).get('virtualenv_dir')
+    prefix_command = 'export PIP_VIRTUALENV_BASE=%s; ' % host_dict.get('virtualenv_dir')
     prefix_command += 'export PIP_RESPECT_VIRTUALEVN=true'
-
-    host_dict = get_host_dict(env.host)
 
     for site in get_sites():
         env.site = site
@@ -270,8 +269,8 @@ def setup_virtualenv():
                 virtualenv(git_clone(site_dict.get('clone_url')))
                 # git checkout parent/branch (Should check if not using master)
                 if not site_dict.get('git_branch_name') == 'master':
-                    virtualenv(git_checkout(proj_dir, site_dict.get('git_parent'), \
-                        site_dict.get('git_branch_name')))
+                    virtualenv(git_checkout(proj_dir, site_dict.get('git_parent'),
+                                            site_dict.get('git_branch_name')))
 
                 virtualenv('add2virtualenv %s' % staging_dir)
                 virtualenv('add2virtualenv %s/%s' % (virtualenv_dir, site))
@@ -299,10 +298,9 @@ def pip_install():
         env.site = site  # Needed for virtualenv()
         settings_dict = get_site_settings(site)
 
-        virtualenv('pip install -r %s/%s/%s' % (
-            host_dict.get('virtualenv_dir'),
-            site,
-            settings_dict.get('project_name')) + '/requirements.txt')
+        virtualenv('pip install -r %s/%s/%s' % (host_dict.get('virtualenv_dir'),
+                                                site, settings_dict.get('project_name'))
+                                                + '/requirements.txt')
 
 
 # @roles('staging')
