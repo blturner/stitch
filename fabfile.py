@@ -1,9 +1,14 @@
-import collections, copy, os, pprint, shutil, urllib, yaml
-import collections, copy, os, pprint, shutil, StringIO, urllib, yaml
+import collections
+import os
+import pprint
+import shutil
+import StringIO
+import urllib
+import yaml
 
 from fabric.api import env, local, prefix, require, roles, run, sudo
 from fabric.context_managers import cd
-from fabric.contrib.files import exists, first
+from fabric.contrib.files import exists
 from fabric.operations import put
 from jinja2 import Environment, FileSystemLoader
 
