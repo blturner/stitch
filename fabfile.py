@@ -125,8 +125,7 @@ def get_sites():
 
 def get_site_packages(site):
     env.site = site
-    sp = virtualenv('cdsitepackages && pwd')
-    return sp
+    return virtualenv('python -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"')
 
 
 def get_site_settings(site):
