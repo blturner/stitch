@@ -153,18 +153,22 @@ def site_on_host(site, host):
     return False
 
 
-def generate_conf(template_name, dest, context={}):
-    dest = '/'.join((dest, '%s.conf' % env.site))
+def generate_conf(template_name, dest, filename, context={}):
     output = StringIO.StringIO()
     t = jinja_env.get_template(template_name)
     t.stream(context).dump(output)
 
+    if not local_or_remote_exists(dest):
+        local_or_remote('mkdir -p %s' % dest)
+
+    target = '/'.join((dest, filename))
+
     if is_local(env.host):
-        f = open(dest, 'w')
+        f = open(target, 'w')
         f.write(output.getvalue())
         f.close()
     else:
-        put(output, dest)
+        put(output, target)
     output.close()
 
 
@@ -175,7 +179,6 @@ def generate_confs():
     wsgi_dir = host_dict.get('wsgi_dir')
 
     for site in get_sites():
-        env.site = site
         context = {
             'admin_media': '/'.join((get_site_packages(site), 'django/contrib/admin/media')),
             'pypath': get_site_settings(site).get('pythonpath').get(host, []),
@@ -184,54 +187,42 @@ def generate_confs():
             'staging_domain': host_dict.get('staging_domain'),
             'wsgi_dir': host_dict.get('wsgi_dir')
         }
-        generate_conf('apache/base.conf', apache_dir, context)
-        generate_conf('wsgi/base.conf', wsgi_dir, context)
+        generate_conf('apache/base.conf', apache_dir, '%s.conf' % site, context)
+        generate_conf('wsgi/base.conf', wsgi_dir, '%s.conf' % site, context)
 
 
-def setup_settings_dir(settings_dir, site_settings_dir):
-    if not os.path.exists(settings_dir + '__init__.py'):
-        open(os.path.join(settings_dir, '__init__.py'), 'w')
+def init_settings_dir(path):
+    init_file = '/'.join((path, '__init__.py'))
+    mgmt_file = '/'.join((path, 'manage.py'))
 
-    if not os.path.exists(site_settings_dir + '__init__.py'):
-        open(os.path.join(site_settings_dir, '__init__.py'), 'w')
+    if not local_or_remote_exists(init_file):
+        f = open(init_file, 'w')
+        if not is_local(env.host):
+            put(f, path)
+    if not local_or_remote_exists(mgmt_file):
+        f = open(mgmt_file, 'w')
+        f.write(urllib.urlopen('https://code.djangoproject.com/export/17145/django/branches/releases/1.3.X/django/conf/project_template/manage.py').read())
+        if not is_local(env.host):
+            put(f, path)
 
-    if not os.path.exists(site_settings_dir + 'manage.py'):
-        urllib.urlretrieve(
-            'https://code.djangoproject.com/export/17145/django/branches/releases/1.3.X/django/conf/project_template/manage.py',
-            site_settings_dir + '/manage.py')
 
-
-def set_settings_overrides():
+def generate_settings():
+    host_dict = get_host_dict(env.host)
     pp = pprint.PrettyPrinter()
-    settings_dir = get_host_dict(env.host).get('staging_settings')
+    settings_dir = host_dict.get('staging_settings')
 
-    local_dir = '/Users/bturner/Projects/staging/staging_settings'
     for site in get_sites():
-        site_settings_dir = '/'.join((settings_dir, site))
-        if not local_or_remote_exists(site_settings_dir):
-            local_or_remote('mkdir -p %s' % site_settings_dir)
-
-        local_settings_dir = '/'.join((local_dir, env.host, site))
-        if not os.path.exists(local_settings_dir):
-            os.makedirs(local_settings_dir)
-        setup_settings_dir(local_dir, local_settings_dir)
-
-        put_local_or_remote('/'.join((local_dir, '__init__.py')), settings_dir)
-        put_local_or_remote('/'.join((local_settings_dir, '__init__.py')), site_settings_dir)
-        put_local_or_remote('/'.join((local_settings_dir, 'manage.py')), site_settings_dir)
-
+        site_settings = '/'.join((settings_dir, site))
+        if not local_or_remote_exists(site_settings):
+            local_or_remote('mkdir -p %s' % site_settings)
+        init_settings_dir(site_settings)
         settings = get_site_settings(site)
-        s = [[k, pp.pformat(v)] for k, v in settings['settings_overrides'].iteritems()]
+        overrides = [[k, pp.pformat(v)] for k, v in settings['settings_overrides'].iteritems()]
         context = {
             'original_settings': settings.get('original_settings'),
-            'settings_overrides': s
+            'settings_overrides': overrides
         }
-        filename = '/'.join((local_settings_dir, 'settings.py'))
-        render_jinja('settings/base.py', context, filename)
-
-        if not local_or_remote_exists(site_settings_dir):
-            local_or_remote('mkdir -p %s' % site_settings_dir)
-        put_local_or_remote(filename, site_settings_dir)
+        generate_conf('settings/base.py', site_settings, 'settings.py', context)
 
 
 def setup_virtualenv():
