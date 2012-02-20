@@ -1,4 +1,5 @@
 import collections, copy, os, pprint, shutil, urllib, yaml
+import collections, copy, os, pprint, shutil, StringIO, urllib, yaml
 
 from fabric.api import env, local, prefix, require, roles, run, sudo
 from fabric.context_managers import cd
@@ -152,50 +153,39 @@ def site_on_host(site, host):
     return False
 
 
-def set_apache_conf():
+def generate_conf(template_name, dest, context={}):
+    dest = '/'.join((dest, '%s.conf' % env.site))
+    output = StringIO.StringIO()
+    t = jinja_env.get_template(template_name)
+    t.stream(context).dump(output)
+
+    if is_local(env.host):
+        f = open(dest, 'w')
+        f.write(output.getvalue())
+        f.close()
+    else:
+        put(output, dest)
+    output.close()
+
+
+def generate_confs():
     host = get_host_shortname(env.host)
     host_dict = get_host_dict(env.host)
     apache_dir = '/'.join((host_dict.get('apache_dir'), host))
-    local_dir = '/'.join(('/Users/bturner/Projects/staging/httpd', host))
+    wsgi_dir = host_dict.get('wsgi_dir')
+
     for site in get_sites():
-        if not os.path.exists(local_dir):
-            os.makedirs(local_dir)
-        filename = '%s.conf' % site
+        env.site = site
         context = {
             'admin_media': '/'.join((get_site_packages(site), 'django/contrib/admin/media')),
+            'pypath': get_site_settings(site).get('pythonpath').get(host, []),
             'site': site,
+            'sitepackages': get_site_packages(site),
             'staging_domain': host_dict.get('staging_domain'),
             'wsgi_dir': host_dict.get('wsgi_dir')
         }
-        local_file = '/'.join((local_dir, filename))
-        render_jinja('apache/base.conf', context, local_file)
-        if not local_or_remote_exists(apache_dir):
-            local_or_remote('mkdir -p %s' % apache_dir)
-        put_local_or_remote(local_file, apache_dir)
-
-
-def set_wsgi_conf():
-    host = get_host_shortname(env.host)
-    host_dict = get_host_dict(env.host)
-    wsgi_dir = host_dict.get('wsgi_dir')
-    local_dir = '/'.join(('/Users/bturner/Projects/staging/wsgi', host))
-
-    for site in get_sites():
-        if not os.path.exists(local_dir):
-            os.makedirs(local_dir)
-        filename = 'sites.%s.conf' % site
-        pypath = get_site_settings(site).get('pythonpath').get(host, [])
-
-        context = {
-            'sitepackages': get_site_packages(site),
-            'pypath': pypath,
-            'site': site
-        }
-        wsgi_conf = '/'.join((local_dir, filename))
-        render_jinja('wsgi/base.conf', context, wsgi_conf)
-        if not local_or_remote_exists(wsgi_dir):
-            local_or_remote('mkdir -p %s' % wsgi_dir)
-        put_local_or_remote(wsgi_conf, wsgi_dir)
+        generate_conf('apache/base.conf', apache_dir, context)
+        generate_conf('wsgi/base.conf', wsgi_dir, context)
 
 
 def setup_settings_dir(settings_dir, site_settings_dir):
