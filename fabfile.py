@@ -189,6 +189,7 @@ def generate_confs():
         }
         generate_conf('apache/base.conf', apache_dir, '%s.conf' % site, context)
         generate_conf('wsgi/base.conf', wsgi_dir, '%s.conf' % site, context)
+        generate_settings(site)
 
 
 def init_settings_dir(path):
@@ -206,23 +207,21 @@ def init_settings_dir(path):
             put(f, path)
 
 
-def generate_settings():
+def generate_settings(site):
     host_dict = get_host_dict(env.host)
     pp = pprint.PrettyPrinter()
     settings_dir = host_dict.get('staging_settings')
-
-    for site in get_sites():
-        site_settings = '/'.join((settings_dir, site))
-        if not local_or_remote_exists(site_settings):
-            local_or_remote('mkdir -p %s' % site_settings)
-        init_settings_dir(site_settings)
-        settings = get_site_settings(site)
-        overrides = [[k, pp.pformat(v)] for k, v in settings['settings_overrides'].iteritems()]
-        context = {
-            'original_settings': settings.get('original_settings'),
-            'settings_overrides': overrides
-        }
-        generate_conf('settings/base.py', site_settings, 'settings.py', context)
+    site_settings = '/'.join((settings_dir, site))
+    if not local_or_remote_exists(site_settings):
+        local_or_remote('mkdir -p %s' % site_settings)
+    init_settings_dir(site_settings)
+    settings = get_site_settings(site)
+    overrides = [[k, pp.pformat(v)] for k, v in settings['settings_overrides'].iteritems()]
+    context = {
+        'original_settings': settings.get('original_settings'),
+        'settings_overrides': overrides
+    }
+    generate_conf('settings/base.py', site_settings, 'settings.py', context)
 
 
 def setup_virtualenv():
