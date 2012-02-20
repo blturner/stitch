@@ -240,7 +240,7 @@ def setup_virtualenv():
     """
     host_dict = get_host_dict(env.host)
     code_dir = host_dict.get('code_dir')
-    staging_dir = code_dir + '/staging'
+    virtualenv_dir = host_dict.get('virtualenv_dir')
 
     prefix_command = 'export PIP_VIRTUALENV_BASE=%s; ' % host_dict.get('virtualenv_dir')
     prefix_command += 'export PIP_RESPECT_VIRTUALEVN=true'
@@ -248,7 +248,6 @@ def setup_virtualenv():
     for site in get_sites():
         env.site = site
         site_dict = get_site_settings(site)
-        virtualenv_dir = host_dict.get('virtualenv_dir')
         proj_dir = "%s/%s/%s" % (
             virtualenv_dir,
             site,
@@ -262,8 +261,10 @@ def setup_virtualenv():
                     virtualenv(git_checkout(proj_dir, site_dict.get('git_parent'),
                                             site_dict.get('git_branch_name')))
 
-                virtualenv('add2virtualenv %s' % staging_dir)
+                virtualenv('add2virtualenv %s' % host_dict.get('staging_settings'))
                 virtualenv('add2virtualenv %s/%s' % (virtualenv_dir, site))
+                if code_dir:
+                    virtualenv('add2virtualenv %s' % code_dir)
 
 
 def virtualenv(command):
