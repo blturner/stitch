@@ -197,14 +197,24 @@ def init_settings_dir(path):
     mgmt_file = '/'.join((path, 'manage.py'))
 
     if not local_or_remote_exists(init_file):
-        f = open(init_file, 'w')
-        if not is_local(env.host):
-            put(f, path)
+        if is_local(env.host):
+            f = open(init_file, 'w')
+        else:
+            output = StringIO.StringIO()
+            output.write('')
+            put(output, init_file)
+            output.close()
+
     if not local_or_remote_exists(mgmt_file):
-        f = open(mgmt_file, 'w')
-        f.write(urllib.urlopen('https://code.djangoproject.com/export/17145/django/branches/releases/1.3.X/django/conf/project_template/manage.py').read())
-        if not is_local(env.host):
-            put(f, path)
+        output = StringIO.StringIO()
+        w = urllib.urlopen('https://code.djangoproject.com/export/17145/django/branches/releases/1.3.X/django/conf/project_template/manage.py').read()
+        output.write(w)
+        if is_local(env.host):
+            f = open(mgmt_file, 'w')
+            f.write(output.getvalue())
+        else:
+            put(output, mgmt_file)
+        output.close()
 
 
 def generate_settings(site):
