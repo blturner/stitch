@@ -180,6 +180,8 @@ def generate_confs():
     host = get_host_shortname(env.host)
     host_dict = get_host_dict(env.host)
     apache_dir = '/'.join((host_dict.get('apache_dir'), host))
+    staging_domain = host_dict.get('staging_domain')
+    virtualenv_dir = host_dict.get('virtualenv_dir')
     wsgi_dir = host_dict.get('wsgi_dir')
 
     for site in get_sites():
@@ -188,8 +190,9 @@ def generate_confs():
             'pypath': get_site_settings(site).get('pythonpath').get(host, []),
             'site': site,
             'sitepackages': get_site_packages(site),
-            'staging_domain': host_dict.get('staging_domain'),
-            'wsgi_dir': host_dict.get('wsgi_dir')
+            'staging_domain': staging_domain,
+            'virtualenv_dir': '/'.join((virtualenv_dir, site)),
+            'wsgi_dir': wsgi_dir
         }
         generate_conf('apache/base.conf', apache_dir, '%s.conf' % site, context)
         generate_conf('wsgi/base.conf', wsgi_dir, '%s.conf' % site, context)
