@@ -20,10 +20,12 @@ Usage:
     `fab --roles=ROLE stage`
 """
 
+jinja_env = Environment(loader=FileSystemLoader('templates'))
+
+# global
 f = open("staging.yml")
 env.conf = yaml.load(f.read())
 f.close()
-jinja_env = Environment(loader=FileSystemLoader('templates'))
 
 
 def local_or_remote(command):
@@ -291,6 +293,7 @@ def virtualenv(command):
 
 
 def pip_install():
+    # TODO: Give feedback as to what's going on.
     host_dict = get_host_dict(env.host)
     for site in get_sites():
         env.site = site  # Needed for virtualenv()
@@ -301,19 +304,37 @@ def pip_install():
                                                 + '/requirements.txt')
 
 
+def pip_update():
+    host_dict = get_host_dict(env.host)
+    for site in get_sites():
+        env.site = site  # Needed for virtualenv()
+        settings = get_site_settings(site)
+        virtualenv('pip install -r %s/%s/%s' % (host_dict.get('virtualenv_dir'),
+                                                site, settings.get('project_name'))
+                                                + '/requirements.txt')
+
+
+def setup():
+    setup_virtualenv()
+    pip_install()
+
+
 # @roles('staging')
 def stage():
     """
     This should update all server settings.
     """
-    # setup_virtualenv()
-    set_apache_conf()
-    set_wsgi_conf()
-    set_settings_overrides()
+    generate_confs()
     restart()
 
 
-# @roles('production')
+def stage_site(site):
+    """
+    `fab -R testing stage_site:site`
+    """
+
+
+@roles('production')
 def deploy():
     """
     This command should run git pull, update pip, and restart the server.
