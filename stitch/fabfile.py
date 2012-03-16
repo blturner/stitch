@@ -167,7 +167,7 @@ def generate_conf(template_name, dest, filename, context={}):
     if not local_or_remote_exists(dest):
         local_or_remote('mkdir -p %s' % dest)
 
-    target = '/'.join((dest, filename))
+    target = os.path.join(dest, filename)
 
     if is_local(env.host):
         f = open(target, 'w')
@@ -181,19 +181,19 @@ def generate_conf(template_name, dest, filename, context={}):
 def generate_confs():
     host = get_host_shortname(env.host)
     host_dict = get_host_dict(env.host)
-    apache_dir = '/'.join((host_dict.get('apache_dir'), host))
+    apache_dir = os.path.join(host_dict.get('apache_dir'), host)
     staging_domain = host_dict.get('staging_domain')
     virtualenv_dir = host_dict.get('virtualenv_dir')
     wsgi_dir = host_dict.get('wsgi_dir')
 
     for site in get_sites():
         context = {
-            'admin_media': '/'.join((get_site_packages(site), 'django/contrib/admin/media')),
+            'admin_media': os.path.join(get_site_packages(site), 'django/contrib/admin/media'),
             'pypath': get_site_settings(site).get('pythonpath').get(host, []),
             'site': site,
             'sitepackages': get_site_packages(site),
             'staging_domain': staging_domain,
-            'virtualenv_dir': '/'.join((virtualenv_dir, site)),
+            'virtualenv_dir': os.path.join(virtualenv_dir, site),
             'wsgi_dir': wsgi_dir
         }
         generate_conf('apache/base.conf', apache_dir, '%s.conf' % site, context)
@@ -202,8 +202,8 @@ def generate_confs():
 
 
 def init_settings_dir(path):
-    init_file = '/'.join((path, '__init__.py'))
-    mgmt_file = '/'.join((path, 'manage.py'))
+    init_file = os.path.join(path, '__init__.py')
+    mgmt_file = os.path.join(path, 'manage.py')
 
     if not local_or_remote_exists(init_file):
         if is_local(env.host):
@@ -230,7 +230,7 @@ def generate_settings(site):
     host_dict = get_host_dict(env.host)
     pp = pprint.PrettyPrinter()
     settings_dir = host_dict.get('staging_settings')
-    site_settings = '/'.join((settings_dir, site))
+    site_settings = os.path.join(settings_dir, site)
     if not local_or_remote_exists(site_settings):
         local_or_remote('mkdir -p %s' % site_settings)
     init_settings_dir(site_settings)
