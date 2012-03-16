@@ -1,4 +1,3 @@
-import collections
 import os
 import pprint
 import shutil
@@ -11,6 +10,8 @@ from fabric.context_managers import cd
 from fabric.contrib.files import exists
 from fabric.operations import put
 from jinja2 import Environment, FileSystemLoader
+
+from stitch.helpers import update
 
 """
 Usage:
@@ -54,21 +55,6 @@ def render_jinja(template, context, filename):
     c = context
     with open(filename, 'w') as f:
         f.write(t.render(c))
-
-
-def update(d, u):
-    """
-    Utility function that takes a dictionary and updates keys with values from a
-    second dictionary.
-    http://stackoverflow.com/a/3233356
-    """
-    for k, v in u.iteritems():
-        if isinstance(v, collections.Mapping):
-            r = update(d.get(k, {}), v)
-            d[k] = r
-        else:
-            d[k] = u[k]
-    return d
 
 
 def restart():
