@@ -1,21 +1,19 @@
 import os
 import pprint
-import shutil
 import StringIO
 import urllib
 import yaml
 
-from fabric.api import env, local, prefix, require, roles, run, sudo
+from fabric.api import env, prefix, roles
 from fabric.context_managers import cd
-from fabric.contrib.files import exists
-from fabric.operations import put
 from jinja2 import Environment, FileSystemLoader
 
-from stitch.helpers import update
+from stitch.helpers import exists, put, restart, run, update
 
 """
 Usage:
     `fab stage`
+    `fab stage:sitename`
     `fab deploy`
     Setting roles from the command line:
     `fab --roles=ROLE stage`
@@ -29,39 +27,11 @@ env.conf = yaml.load(f.read())
 f.close()
 
 
-def local_or_remote(command):
-    if is_local(env.host):
-        return local(command, capture=True)
-    else:
-        return run(command)
-
-
-def local_or_remote_exists(path):
-    if is_local(env.host):
-        return os.path.exists(os.path.expanduser(path))
-    else:
-        return exists(path)
-
-
-def put_local_or_remote(local_path, remote_path):
-    if is_local(env.host):
-        shutil.copy(local_path, remote_path)
-    else:
-        put(local_path, remote_path)
-
-
 def render_jinja(template, context, filename):
     t = jinja_env.get_template(template)
     c = context
     with open(filename, 'w') as f:
         f.write(t.render(c))
-
-
-def restart():
-    if is_local(env.host):
-        local('sudo apachectl graceful')
-    else:
-        sudo('apache2ctl graceful')
 
 
 def setup_roles():
@@ -74,12 +44,6 @@ def setup_roles():
             env.roledefs[role].append(env.conf['hosts'][host].get('hostname'))
     env.local = False
 setup_roles()
-
-
-def is_local(host):
-    if host in env.roledefs['testing']:
-        return True
-    return False
 
 
 def get_host_dict(hostname):
@@ -137,12 +101,14 @@ def get_site_settings(site):
 
 
 def site_on_host(site, host):
-    on_hosts = get_site_settings(site).get('on_hosts')
-    if isinstance(on_hosts, str):
-        on_hosts = [on_hosts]
-    if host in on_hosts:
-        return True
-    return False
+    try:
+        on_hosts = get_site_settings(site).get('on_hosts')
+        if isinstance(on_hosts, str):
+            on_hosts = [on_hosts]
+        if host in on_hosts:
+            return True
+    except KeyError:
+        pass
 
 
 def generate_conf(template_name, dest, filename, context={}):
@@ -150,17 +116,11 @@ def generate_conf(template_name, dest, filename, context={}):
     t = jinja_env.get_template(template_name)
     t.stream(context).dump(output)
 
-    if not local_or_remote_exists(dest):
-        local_or_remote('mkdir -p %s' % dest)
+    if not exists(dest):
+        run('mkdir -p %s' % dest)
 
     target = os.path.join(dest, filename)
-
-    if is_local(env.host):
-        f = open(target, 'w')
-        f.write(output.getvalue())
-        f.close()
-    else:
-        put(output, target)
+    put(output, target)
     output.close()
 
 
@@ -191,24 +151,17 @@ def init_settings_dir(path):
     init_file = os.path.join(path, '__init__.py')
     mgmt_file = os.path.join(path, 'manage.py')
 
-    if not local_or_remote_exists(init_file):
-        if is_local(env.host):
-            f = open(init_file, 'w')
-        else:
-            output = StringIO.StringIO()
-            output.write('')
-            put(output, init_file)
-            output.close()
+    if not exists(init_file):
+        output = StringIO.StringIO()
+        output.write('')
+        put(output, init_file)
+        output.close()
 
-    if not local_or_remote_exists(mgmt_file):
+    if not exists(mgmt_file):
         output = StringIO.StringIO()
         w = urllib.urlopen('https://code.djangoproject.com/export/17145/django/branches/releases/1.3.X/django/conf/project_template/manage.py').read()
         output.write(w)
-        if is_local(env.host):
-            f = open(mgmt_file, 'w')
-            f.write(output.getvalue())
-        else:
-            put(output, mgmt_file)
+        put(output, mgmt_file)
         output.close()
 
 
@@ -217,8 +170,8 @@ def generate_settings(site):
     pp = pprint.PrettyPrinter()
     settings_dir = host_dict.get('staging_settings')
     site_settings = os.path.join(settings_dir, site)
-    if not local_or_remote_exists(site_settings):
-        local_or_remote('mkdir -p %s' % site_settings)
+    if not exists(site_settings):
+        run('mkdir -p %s' % site_settings)
     init_settings_dir(site_settings)
     settings = get_site_settings(site)
     overrides = [[k, pp.pformat(v)] for k, v in settings['settings_overrides'].iteritems()]
@@ -229,7 +182,7 @@ def generate_settings(site):
     generate_conf('settings/base.py', site_settings, 'settings.py', context)
 
 
-def setup_virtualenv():
+def setup_virtualenv(site):
     """
     Setup virtual environments.
     """
@@ -240,26 +193,25 @@ def setup_virtualenv():
     prefix_command = 'export PIP_VIRTUALENV_BASE=%s; ' % host_dict.get('virtualenv_dir')
     prefix_command += 'export PIP_RESPECT_VIRTUALEVN=true'
 
-    for site in get_sites():
-        env.site = site
-        site_dict = get_site_settings(site)
-        proj_dir = "%s/%s/%s" % (
-            virtualenv_dir,
-            site,
-            site_dict.get('project_name'))
-        with prefix(prefix_command):
-            if not local_or_remote_exists(proj_dir):
-                # clone git project
-                virtualenv(git_clone(site_dict.get('clone_url')))
-                # git checkout parent/branch (Should check if not using master)
-                if not site_dict.get('git_branch_name') == 'master':
-                    virtualenv(git_checkout(proj_dir, site_dict.get('git_parent'),
-                                            site_dict.get('git_branch_name')))
+    env.site = site
+    site_dict = get_site_settings(site)
+    proj_dir = "%s/%s/%s" % (
+        virtualenv_dir,
+        site,
+        site_dict.get('project_name'))
+    with prefix(prefix_command):
+        if not exists(proj_dir):
+            # clone git project
+            virtualenv(git_clone(site_dict.get('clone_url')))
+            # git checkout parent/branch (Should check if not using master)
+            if not site_dict.get('git_branch_name') == 'master':
+                virtualenv(git_checkout(proj_dir, site_dict.get('git_parent'),
+                                        site_dict.get('git_branch_name')))
 
-                virtualenv('add2virtualenv %s' % host_dict.get('staging_settings'))
-                virtualenv('add2virtualenv %s/%s' % (virtualenv_dir, site))
-                if code_dir:
-                    virtualenv('add2virtualenv %s' % code_dir)
+            virtualenv('add2virtualenv %s' % host_dict.get('staging_settings'))
+            virtualenv('add2virtualenv %s/%s' % (virtualenv_dir, site))
+            if code_dir:
+                virtualenv('add2virtualenv %s' % code_dir)
 
 
 def virtualenv(command):
@@ -268,26 +220,25 @@ def virtualenv(command):
     """
     with prefix("source `which virtualenvwrapper.sh`"):
         try:
-            local_or_remote('workon %s' % env.site)
+            run('workon %s' % env.site)
         except:
-            local_or_remote('mkvirtualenv %s' % env.site)
+            run('mkvirtualenv %s' % env.site)
         cmd = 'workon %s; ' % env.site
         cmd += 'cdvirtualenv; '
         cmd += command
-        out = local_or_remote(cmd)
+        out = run(cmd)
         return out
 
 
-def pip_install():
+def pip_install(site):
     # TODO: Give feedback as to what's going on.
     host_dict = get_host_dict(env.host)
-    for site in get_sites():
-        env.site = site  # Needed for virtualenv()
-        settings_dict = get_site_settings(site)
+    env.site = site  # Needed for virtualenv()
+    settings_dict = get_site_settings(site)
 
-        virtualenv('pip install -r %s/%s/%s' % (host_dict.get('virtualenv_dir'),
-                                                site, settings_dict.get('project_name'))
-                                                + '/requirements.txt')
+    virtualenv('pip install -r %s/%s/%s' % (host_dict.get('virtualenv_dir'),
+                                            site, settings_dict.get('project_name'))
+                                            + '/requirements.txt')
 
 
 def pip_update():
@@ -300,24 +251,43 @@ def pip_update():
                                                 + '/requirements.txt')
 
 
-def setup():
-    setup_virtualenv()
-    pip_install()
+def setup(*args, **kwargs):
+    host = get_host_shortname(env.host)
+
+    if not args:
+        sites = get_sites()
+    else:
+        sites = args
+
+    for site in sites:
+        if not site_on_host(site, host):
+            print "Invalid site: %s" % site
+        else:
+            print "Valid site: %s" % site
+            setup_virtualenv(site)
+            pip_install(site)
 
 
 # @roles('staging')
-def stage():
+def stage(*args, **kwargs):
     """
     This should update all server settings.
     """
-    generate_confs()
-    restart()
+    host = get_host_shortname(env.host)
 
+    if not args:
+        sites = get_sites()
+    else:
+        sites = args
+    print sites
 
-def stage_site(site):
-    """
-    `fab -R testing stage_site:site`
-    """
+    for site in sites:
+        if not site_on_host(site, host):
+            print "Invalid site: %s" % site
+        else:
+            print "Valid site: %s" % site
+            generate_confs()
+            restart()
 
 
 @roles('production')
