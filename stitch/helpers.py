@@ -1,12 +1,10 @@
 import collections
 import os
-import shutil
 
 from fabric.api import env
 from fabric.api import local as _local
 from fabric.api import run as _run
 from fabric.contrib.files import exists as _exists
-# from fabric.operations import local as _local
 from fabric.operations import put as _put
 from fabric.operations import sudo as _sudo
 
