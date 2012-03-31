@@ -249,43 +249,35 @@ def pip_update():
                                                 + '/requirements.txt')
 
 
-def setup(*args, **kwargs):
-    host = get_host_shortname(env.host)
-
-    if not args:
-        sites = get_sites()
-    else:
-        sites = args
-
-    for site in sites:
-        if not site_on_host(site, host):
-            print "Invalid site: %s" % site
+def process_sites(fn):
+    def wrapped(*args, **kwargs):
+        if not args:
+            sites = get_sites()
         else:
-            print "Valid site: %s" % site
-            setup_virtualenv(site)
-            pip_install(site)
+            sites = args
+        for site in sites:
+            if not site_on_host(site, get_host_shortname(env.host)):
+                print "Invalid site %s" % site
+            else:
+                env.site = site
+                print "Valid site: %s" % env.site
+                fn()
+    return wrapped
 
 
-# @roles('staging')
+@process_sites
+def setup(*args, **kwargs):
+    setup_virtualenv()
+    pip_install()
+
+
+@process_sites
 def stage(*args, **kwargs):
     """
     This should update all server settings.
     """
-    host = get_host_shortname(env.host)
-
-    if not args:
-        sites = get_sites()
-    else:
-        sites = args
-    print sites
-
-    for site in sites:
-        if not site_on_host(site, host):
-            print "Invalid site: %s" % site
-        else:
-            print "Valid site: %s" % site
-            generate_confs()
-            restart()
+    generate_confs()
+    restart()
 
 
 @roles('production')
