@@ -180,7 +180,7 @@ def generate_settings(site):
     generate_conf('settings/base.py', site_settings, 'settings.py', context)
 
 
-def setup_virtualenv(site):
+def setup_virtualenv():
     """
     Setup virtual environments.
     """
@@ -191,7 +191,7 @@ def setup_virtualenv(site):
     prefix_command = 'export PIP_VIRTUALENV_BASE=%s; ' % host_dict.get('virtualenv_dir')
     prefix_command += 'export PIP_RESPECT_VIRTUALEVN=true'
 
-    env.site = site
+    site = env.site
     site_dict = get_site_settings(site)
     proj_dir = "%s/%s/%s" % (
         virtualenv_dir,
@@ -228,14 +228,13 @@ def virtualenv(command):
         return out
 
 
-def pip_install(site):
+def pip_install():
     # TODO: Give feedback as to what's going on.
     host_dict = get_host_dict(env.host)
-    env.site = site  # Needed for virtualenv()
-    settings_dict = get_site_settings(site)
+    settings_dict = get_site_settings(env.site)
 
     virtualenv('pip install -r %s/%s/%s' % (host_dict.get('virtualenv_dir'),
-                                            site, settings_dict.get('project_name'))
+                                            env.site, settings_dict.get('project_name'))
                                             + '/requirements.txt')
 
 
@@ -266,9 +265,12 @@ def process_sites(fn):
 
 
 @process_sites
+@process_sites
 def setup(*args, **kwargs):
     setup_virtualenv()
     pip_install()
+    generate_confs()
+    restart()
 
 
 @process_sites
