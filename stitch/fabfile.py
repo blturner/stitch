@@ -34,16 +34,14 @@ def render_jinja(template, context, filename):
         f.write(t.render(c))
 
 
-def setup_roles():
-    for role, hosts in env.conf['roles'].iteritems():
-        if isinstance(hosts, str):
-            hosts = [hosts]
+for role, hosts in env.conf['roles'].iteritems():
+    if isinstance(hosts, str):
+        hosts = [hosts]
 
-        env.roledefs[role] = []
-        for host in hosts:
-            env.roledefs[role].append(env.conf['hosts'][host].get('hostname'))
-    env.local = False
-setup_roles()
+    env.roledefs[role] = []
+    for host in hosts:
+        env.roledefs[role].append(env.conf['hosts'][host].get('hostname'))
+env.local = False
 
 
 def get_host_dict(hostname):
