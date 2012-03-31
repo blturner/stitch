@@ -130,19 +130,19 @@ def generate_confs():
     virtualenv_dir = host_dict.get('virtualenv_dir')
     wsgi_dir = host_dict.get('wsgi_dir')
 
-    for site in get_sites():
-        context = {
-            'admin_media': os.path.join(get_site_packages(site), 'django/contrib/admin/media'),
-            'pypath': get_site_settings(site).get('pythonpath').get(host, []),
-            'site': site,
-            'sitepackages': get_site_packages(site),
-            'staging_domain': staging_domain,
-            'virtualenv_dir': os.path.join(virtualenv_dir, site),
-            'wsgi_dir': wsgi_dir
-        }
-        generate_conf('apache/base.conf', apache_dir, '%s.conf' % site, context)
-        generate_conf('wsgi/base.conf', wsgi_dir, '%s.conf' % site, context)
-        generate_settings(site)
+    site = env.site
+    context = {
+        'admin_media': os.path.join(get_site_packages(site), 'django/contrib/admin/media'),
+        'pypath': get_site_settings(site).get('pythonpath').get(host, []),
+        'site': site,
+        'sitepackages': get_site_packages(site),
+        'staging_domain': staging_domain,
+        'virtualenv_dir': os.path.join(virtualenv_dir, site),
+        'wsgi_dir': wsgi_dir
+    }
+    generate_conf('apache/base.conf', apache_dir, '%s.conf' % site, context)
+    generate_conf('wsgi/base.conf', wsgi_dir, '%s.conf' % site, context)
+    generate_settings(site)
 
 
 def init_settings_dir(path):
