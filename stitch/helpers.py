@@ -54,6 +54,6 @@ def restart():
 
 
 def _is_local(host):
-    if host in env.roledefs['testing']:
+    if host in env.roledefs['local']:
         return True
     return False
