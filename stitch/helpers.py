@@ -4,6 +4,8 @@ import os
 from fabric.api import env
 from fabric.api import local as _local
 from fabric.api import run as _run
+from fabric.context_managers import cd as _cd
+from fabric.context_managers import lcd as _lcd
 from fabric.contrib.files import exists as _exists
 from fabric.operations import put as _put
 from fabric.operations import sudo as _sudo
@@ -23,9 +25,16 @@ def update(d, u):
     return d
 
 
+def cd(path):
+    if _is_local(env.host):
+        return _lcd(path)
+    else:
+        return _cd(path)
+
+
 def run(command, shell=True, pty=True):
     if _is_local(env.host):
-        return _local(command % (env))
+        return _local(command % (env), capture=True)
     else:
         return _run(command % (env), shell=shell, pty=pty)
 
