@@ -61,18 +61,15 @@ def get_host_shortname(hostname):
 
 
 def get_sites():
-    host = get_host_shortname(env.host)
     sites = []
 
     for site in env.conf['sites']:
-        if site_on_host(site, host):
-            sites.append(site)
+        sites.append(site)
     return sites
 
 
-def get_site_packages(site):
-    env.site = site
-    return virtualenv('python -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"')
+def get_site_packages():
+    return _virtualenv('python -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"')
 
 
 def get_site_settings(site):
@@ -90,12 +87,12 @@ def get_site_settings(site):
     return settings
 
 
-def site_on_host(site, host):
+def site_on_host():
     try:
-        on_hosts = get_site_settings(site).get('on_hosts')
+        on_hosts = _get('on_hosts')
         if isinstance(on_hosts, str):
             on_hosts = [on_hosts]
-        if host in on_hosts:
+        if get_host_shortname(env.host) in on_hosts:
             return True
     except KeyError:
         pass
@@ -116,25 +113,23 @@ def generate_conf(template_name, dest, filename, context={}):
 
 def generate_confs():
     host = get_host_shortname(env.host)
-    host_dict = get_host_dict(env.host)
-    apache_dir = os.path.join(host_dict.get('apache_dir'), host)
-    staging_domain = host_dict.get('staging_domain')
-    virtualenv_dir = host_dict.get('virtualenv_dir')
-    wsgi_dir = host_dict.get('wsgi_dir')
-
+    apache_dir = os.path.join(_get('apache_dir'), host)
     site = env.site
+    sitepackages = get_site_packages()
+    wsgi_dir = _get('wsgi_dir')
+
     context = {
-        'admin_media': os.path.join(get_site_packages(site), 'django/contrib/admin/media'),
-        'pypath': get_site_settings(site).get('pythonpath').get(host, []),
+        'admin_media': os.path.join(sitepackages, 'django/contrib/admin/media'),
+        'pypath': _get('pythonpath').get(host, []),
         'site': site,
-        'sitepackages': get_site_packages(site),
-        'staging_domain': staging_domain,
-        'virtualenv_dir': os.path.join(virtualenv_dir, site),
+        'sitepackages': sitepackages,
+        'staging_domain': _get('staging_domain'),
+        'virtualenv_dir': os.path.join(_get('virtualenv_dir'), site),
         'wsgi_dir': wsgi_dir
     }
     generate_conf('apache/base.conf', apache_dir, '%s.conf' % site, context)
     generate_conf('wsgi/base.conf', wsgi_dir, '%s.conf' % site, context)
-    generate_settings(site)
+    generate_settings()
 
 
 def init_settings_dir(path):
@@ -155,18 +150,16 @@ def init_settings_dir(path):
         output.close()
 
 
-def generate_settings(site):
-    host_dict = get_host_dict(env.host)
+def generate_settings():
     pp = pprint.PrettyPrinter()
-    settings_dir = host_dict.get('staging_settings')
-    site_settings = os.path.join(settings_dir, site)
+    settings_dir = _get('staging_settings')
+    site_settings = os.path.join(settings_dir, env.site)
     if not exists(site_settings):
         run('mkdir -p %s' % site_settings)
     init_settings_dir(site_settings)
-    settings = get_site_settings(site)
-    overrides = [[k, pp.pformat(v)] for k, v in settings['settings_overrides'].iteritems()]
+    overrides = [[k, pp.pformat(v)] for k, v in _get('settings_overrides').iteritems()]
     context = {
-        'original_settings': settings.get('original_settings'),
+        'original_settings': _get('original_settings'),
         'settings_overrides': overrides
     }
     generate_conf('settings/base.py', site_settings, 'settings.py', context)
@@ -193,70 +186,44 @@ def setup_virtualenv():
     """
     Setup virtual environments.
     """
-    host_dict = get_host_dict(env.host)
-    code_dir = host_dict.get('code_dir')
-    virtualenv_dir = host_dict.get('virtualenv_dir')
-
-    prefix_command = 'export PIP_VIRTUALENV_BASE=%s; ' % host_dict.get('virtualenv_dir')
+    virtualenv_dir = _get('virtualenv_dir')
+    prefix_command = 'export PIP_VIRTUALENV_BASE=%s; ' % virtualenv_dir
     prefix_command += 'export PIP_RESPECT_VIRTUALEVN=true'
 
-    site = env.site
-    site_dict = get_site_settings(site)
-    proj_dir = "%s/%s/%s" % (
-        virtualenv_dir,
-        site,
-        site_dict.get('project_name'))
     with prefix(prefix_command):
-        if not exists(proj_dir):
-            # clone git project
-            virtualenv(git_clone(site_dict.get('clone_url')))
-            # git checkout parent/branch (Should check if not using master)
-            if not site_dict.get('git_branch_name') == 'master':
-                virtualenv(git_checkout(proj_dir, site_dict.get('git_parent'),
-                                        site_dict.get('git_branch_name')))
+        if not exists(env.project_path):
+            with prefix('source `which virtualenvwrapper.sh`'):
+                run('mkvirtualenv %(site)s')
+        if not exists(env.repo_path):
+            git_clone()
+            git_checkout()
+            add2virtualenv(_get('staging_settings'))
+            add2virtualenv(env.project_path)
 
-            virtualenv('add2virtualenv %s' % host_dict.get('staging_settings'))
-            virtualenv('add2virtualenv %s/%s' % (virtualenv_dir, site))
-            if code_dir:
-                virtualenv('add2virtualenv %s' % code_dir)
 
 def _get(key):
     return env.config.get(key, None)
 
-def virtualenv(command):
-    """
-    Usage: `run(virtualenv(command)) or local(virtualenv(command))`
-    """
+
+def _virtualenv(command):
     with prefix("source `which virtualenvwrapper.sh`"):
-        try:
-            run('workon %s' % env.site)
-        except:
-            run('mkvirtualenv %s' % env.site)
-        cmd = 'workon %s; ' % env.site
-        cmd += 'cdvirtualenv; '
-        cmd += command
-        out = run(cmd)
-        return out
+        with cd(_get('virtualenv_dir')):
+            activate = 'workon %s' % env.site
+            return run(activate + ' && ' + command)
+
+
+def add2virtualenv(path):
+    _virtualenv('add2virtualenv %(path)s' % ({'path': path}))
 
 
 def pip_install():
-    # TODO: Give feedback as to what's going on.
-    host_dict = get_host_dict(env.host)
-    settings_dict = get_site_settings(env.site)
-
-    virtualenv('pip install -r %s/%s/%s' % (host_dict.get('virtualenv_dir'),
-                                            env.site, settings_dict.get('project_name'))
-                                            + '/requirements.txt')
+    _virtualenv('pip install -r %(repo_path)s/requirements.txt')
 
 
-def pip_update():
-    host_dict = get_host_dict(env.host)
-    for site in get_sites():
-        env.site = site  # Needed for virtualenv()
-        settings = get_site_settings(site)
-        virtualenv('pip install -r %s/%s/%s' % (host_dict.get('virtualenv_dir'),
-                                                site, settings.get('project_name'))
-                                                + '/requirements.txt')
+def _load_config():
+    env.config = {}
+    update(env.config, get_host_dict(env.host))
+    update(env.config, get_site_settings(env.site))
 
 
 def process_sites(fn):
@@ -266,40 +233,38 @@ def process_sites(fn):
         else:
             sites = args
         for site in sites:
-            if not site_on_host(site, get_host_shortname(env.host)):
-                print "Invalid site %s" % site
-            else:
-                env.site = site
-                print "Valid site: %s" % env.site
+            env.host_dict = get_host_dict(env.host)
+            env.site = site
+            _load_config()
+            if site_on_host():
+                env.project_path = os.path.join(_get('virtualenv_dir'), env.site)
+                env.repo_path = os.path.join(env.project_path, _get('project_name'))
                 fn()
+            else:
+                print env.site + ' is not on this host.'
+        restart()
     return wrapped
 
 
 @process_sites
-@process_sites
-def setup(*args, **kwargs):
+def debug(*args, **kwargs):
     setup_virtualenv()
     pip_install()
     generate_confs()
-    restart()
 
 
 @process_sites
-def stage(*args, **kwargs):
-    """
-    This should update all server settings.
-    """
+def setup(*args, **kwargs):
+    setup_virtualenv()
     generate_confs()
-    restart()
+    pip_install()
 
 
+@process_sites
 def deploy():
     """
     This command should run git pull, update pip, and restart the server.
     """
-    # require('hosts', provided_by=[staging])
-    # stage()
-    # get_pull()
-    # pip_install()
-
-
+    git_checkout()
+    generate_confs()
+    pip_install()
