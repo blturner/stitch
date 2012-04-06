@@ -4,11 +4,10 @@ import StringIO
 import urllib
 import yaml
 
-from fabric.api import env, prefix, roles
-from fabric.context_managers import cd
+from fabric.api import env, prefix
 from jinja2 import Environment, FileSystemLoader
 
-from stitch.helpers import exists, put, restart, run, update
+from stitch.helpers import *
 
 """
 Usage:
@@ -282,7 +281,6 @@ def stage(*args, **kwargs):
     restart()
 
 
-@roles('production')
 def deploy():
     """
     This command should run git pull, update pip, and restart the server.
