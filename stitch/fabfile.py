@@ -220,6 +220,8 @@ def setup_virtualenv():
             if code_dir:
                 virtualenv('add2virtualenv %s' % code_dir)
 
+def _get(key):
+    return env.config.get(key, None)
 
 def virtualenv(command):
     """
