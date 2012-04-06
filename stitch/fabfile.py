@@ -179,6 +179,23 @@ def generate_settings(site):
     generate_conf('settings/base.py', site_settings, 'settings.py', context)
 
 
+def git_clone():
+    if not exists(env.repo_path):
+        with cd(env.project_path):
+            run('git clone %s' % _get('clone_url'))
+
+
+def git_checkout():
+    with cd(env.repo_path):
+        parent = _get('git_parent')
+        branch = _get('git_branch_name')
+        try:
+            run('git checkout -b %s %s/%s' % (branch, parent, branch))
+        except:
+            pass
+        run('git pull %s %s' % (parent, branch))
+
+
 def setup_virtualenv():
     """
     Setup virtual environments.
@@ -291,13 +308,3 @@ def deploy():
     # pip_install()
 
 
-def git_clone(url):
-    return 'git clone %s' % url
-
-
-def git_checkout(directory, parent, branch):
-    return 'cd %s; git checkout -b %s %s/%s' % (directory, branch, parent, branch)
-
-
-def git_pull(directory, parent, branch):
-    return 'cd %s; git pull %s %s' % (directory, parent, branch)
