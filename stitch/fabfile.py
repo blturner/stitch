@@ -26,13 +26,6 @@ env.conf = yaml.load(f.read())
 f.close()
 
 
-def render_jinja(template, context, filename):
-    t = jinja_env.get_template(template)
-    c = context
-    with open(filename, 'w') as f:
-        f.write(t.render(c))
-
-
 for role, hosts in env.conf['roles'].iteritems():
     if isinstance(hosts, str):
         hosts = [hosts]
