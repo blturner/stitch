@@ -32,9 +32,9 @@ def cd(path):
         return _cd(path)
 
 
-def run(command, shell=True, pty=True):
+def run(command, capture=False, shell=True, pty=True):
     if _is_local(env.host):
-        return _local(command % (env), capture=True)
+        return _local(command % (env), capture=capture)
     else:
         return _run(command % (env), shell=shell, pty=pty)
 

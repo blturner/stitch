@@ -69,7 +69,7 @@ def get_sites():
 
 
 def get_site_packages():
-    return _virtualenv('python -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"')
+    return _virtualenv('python -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"', capture=True)
 
 
 def get_site_settings(site):
@@ -205,11 +205,11 @@ def _get(key):
     return env.config.get(key, None)
 
 
-def _virtualenv(command):
+def _virtualenv(command, **kwargs):
     with prefix("source `which virtualenvwrapper.sh`"):
         with cd(_get('virtualenv_dir')):
             activate = 'workon %s' % env.site
-            return run(activate + ' && ' + command)
+            return run(activate + ' && ' + command, **kwargs)
 
 
 def add2virtualenv(path):
