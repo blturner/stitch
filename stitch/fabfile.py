@@ -120,6 +120,7 @@ def generate_confs():
 
     context = {
         'admin_media': os.path.join(sitepackages, 'django/contrib/admin/media'),
+        'gem_home': _get('settings_overrides').get('GEM_HOME'),
         'pypath': _get('pythonpath').get(host, []),
         'site': site,
         'sitepackages': sitepackages,
