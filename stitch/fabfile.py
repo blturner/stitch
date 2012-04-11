@@ -203,7 +203,10 @@ def setup_virtualenv():
 
 
 def _get(key):
-    return env.config.get(key, None)
+    try:
+        return env.config[key]
+    except KeyError:
+        raise NotDefinedError()
 
 
 def _virtualenv(command, **kwargs):

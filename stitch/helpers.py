@@ -11,6 +11,10 @@ from fabric.operations import put as _put
 from fabric.operations import sudo as _sudo
 
 
+class NotDefinedError(Exception):
+    pass
+
+
 def update(d, u):
     """
     Utility function that takes a dictionary and updates keys with values from
