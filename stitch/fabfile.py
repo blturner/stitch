@@ -98,25 +98,18 @@ def site_on_host():
         pass
 
 
-def generate_conf(template_name, dest, filename, context={}):
+def generate_conf(template_name, filename, context={}):
     output = StringIO.StringIO()
     t = jinja_env.get_template(template_name)
     t.stream(context).dump(output)
-
-    if not exists(dest):
-        run('mkdir -p %s' % dest)
-
-    target = os.path.join(dest, filename)
-    put(output, target)
+    put(output, filename)
     output.close()
 
 
 def generate_confs():
     host = get_host_shortname(env.host)
-    apache_dir = os.path.join(_get('apache_dir'), host)
     site = env.site
     sitepackages = get_site_packages()
-    wsgi_dir = _get('wsgi_dir')
 
     context = {
         'admin_media': os.path.join(sitepackages, 'django/contrib/admin/media'),
@@ -126,10 +119,11 @@ def generate_confs():
         'sitepackages': sitepackages,
         'staging_domain': _get('staging_domain'),
         'virtualenv_dir': os.path.join(_get('virtualenv_dir'), site),
-        'wsgi_dir': wsgi_dir
+        'wsgi_conf': env.wsgi_conf,
+        'wsgi_dir': _get('wsgi_dir'),
     }
-    generate_conf('apache/base.conf', apache_dir, '%s.conf' % site, context)
-    generate_conf('wsgi/base.conf', wsgi_dir, '%s.conf' % site, context)
+    generate_conf('apache/base.conf', env.apache_conf, context)
+    generate_conf('wsgi/base.conf', env.wsgi_conf, context)
     generate_settings()
 
 
@@ -153,17 +147,17 @@ def init_settings_dir(path):
 
 def generate_settings():
     pp = pprint.PrettyPrinter()
-    settings_dir = _get('staging_settings')
-    site_settings = os.path.join(settings_dir, env.site)
-    if not exists(site_settings):
-        run('mkdir -p %s' % site_settings)
-    init_settings_dir(site_settings)
+    settings_dir = env.settings_dir
+    if not exists(settings_dir):
+        run('mkdir -p %s' % settings_dir)
+    init_settings_dir(settings_dir)
     overrides = [[k, pp.pformat(v)] for k, v in _get('settings_overrides').iteritems()]
     context = {
         'original_settings': _get('original_settings'),
         'settings_overrides': overrides
     }
-    generate_conf('settings/base.py', site_settings, 'settings.py', context)
+    settings_file = os.path.join(settings_dir, 'settings.py')
+    generate_conf('settings/base.py', settings_file, context)
 
 
 def git_clone():
@@ -200,6 +194,19 @@ def setup_virtualenv():
             git_checkout()
             add2virtualenv(_get('staging_settings'))
             add2virtualenv(env.project_path)
+
+
+def setup_directories():
+    apache_dir = _get('apache_dir')
+    settings_dir = os.path.join(_get('staging_settings'), env.site)
+    wsgi_dir = _get('wsgi_dir')
+
+    if not exists(apache_dir):
+        run('mkdir -p %s' % apache_dir)
+    if not exists(settings_dir):
+        run('mkdir -p %s' % settings_dir)
+    if not exists(wsgi_dir):
+        run('mkdir -p %s' % wsgi_dir)
 
 
 def _get(key):
@@ -241,11 +248,15 @@ def process_sites(fn):
             env.site = site
             _load_config()
             if site_on_host():
+                base_dir = _get('base_dir')
+                env.apache_conf = os.path.join(base_dir, _get('apache_dir'), ('%s.conf' % env.site))
                 env.project_path = os.path.join(_get('virtualenv_dir'), env.site)
                 env.repo_path = os.path.join(env.project_path, _get('project_name'))
+                env.settings_dir = os.path.join(base_dir, _get('staging_settings'), env.site)
+                env.wsgi_conf = os.path.join(base_dir, _get('wsgi_dir'), ('%s.conf' % env.site))
                 fn()
             else:
-                print env.site + ' is not on this host.'
+                print env.site + ' is not on this host. Skipping...'
         restart()
     return wrapped
 
@@ -259,6 +270,7 @@ def debug(*args, **kwargs):
 
 @process_sites
 def setup(*args, **kwargs):
+    setup_directories()
     setup_virtualenv()
     generate_confs()
     pip_install()
